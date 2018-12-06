@@ -37,6 +37,7 @@ type ResponseParser interface {
 type HTTPGeocoder struct {
 	EndpointBuilder
 	ResponseParserFactory
+	Referer string
 }
 
 // Geocode returns location for address
@@ -53,7 +54,7 @@ func (g HTTPGeocoder) Geocode(address string) (*Location, error) {
 	ch := make(chan geoResp, 1)
 
 	go func(ch chan geoResp) {
-		if err := response(ctx, g.GeocodeURL(url.QueryEscape(address)), responseParser); err != nil {
+		if err := response(ctx, g.GeocodeURL(url.QueryEscape(address)), responseParser, g.Referer); err != nil {
 			ch <- geoResp{
 				l: nil,
 				e: err,
@@ -89,7 +90,7 @@ func (g HTTPGeocoder) ReverseGeocode(lat, lng float64) (*Address, error) {
 	ch := make(chan revResp, 1)
 
 	go func(ch chan revResp) {
-		if err := response(ctx, g.ReverseGeocodeURL(Location{lat, lng}), responseParser); err != nil {
+		if err := response(ctx, g.ReverseGeocodeURL(Location{lat, lng}), responseParser, g.Referer); err != nil {
 			ch <- revResp{
 				a: nil,
 				e: err,
@@ -112,12 +113,16 @@ func (g HTTPGeocoder) ReverseGeocode(lat, lng float64) (*Address, error) {
 }
 
 // Response gets response from url
-func response(ctx context.Context, url string, obj ResponseParser) error {
+func response(ctx context.Context, url string, obj ResponseParser, referer string) error {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
 	req = req.WithContext(ctx)
+
+	if referer != "" {
+		req.Header.Set("Referer", referer)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
